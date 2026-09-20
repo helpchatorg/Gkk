@@ -10426,16 +10426,19 @@ function openWalletEkycCooldownModal() {
         if (new Date(sub.nextRenewalDate) > new Date()) return;
         const alreadyPending = (wallet.chargeRequests || []).some(r => r.status === 'Pending' && r.type === 'renewal');
         if (alreadyPending) return;
+        const attemptsSoFar = sub.autoSendAttempts || 0;
+        if (attemptsSoFar >= 3) return;
         const plan = getSubscriptionPlanById(sub.planId);
         if (!plan) return;
         const req = {
             id: 'WCR' + Date.now() + Math.floor(Math.random() * 1000), type: 'renewal', amount: plan.price,
-            note: 'Auto-sent by the system — subscription reached its Next Renewal date. No manual action was needed from the Super Admin.',
+            note: 'Auto-sent by the system (attempt ' + (attemptsSoFar + 1) + ' of 3) — subscription reached its Next Renewal date. No manual action was needed from the Super Admin.',
             status: 'Pending', requestedAt: new Date().toISOString(), decidedAt: null, decisionReason: null,
             planId: plan.id, planName: plan.name, durationDays: plan.durationDays, systemGenerated: true
         };
         wallet.chargeRequests = wallet.chargeRequests || [];
         wallet.chargeRequests.push(req);
+        wallet.subscription.autoSendAttempts = attemptsSoFar + 1;
         if (typeof persistWalletOnly === 'function') persistWalletOnly();
     }
     // ===== SUBSCRIPTION ENFORCEMENT LADDER =====
@@ -10792,6 +10795,7 @@ function openWalletEkycCooldownModal() {
             wallet.subscription.durationDays = req.durationDays;
             if (!wallet.subscription.startDate) wallet.subscription.startDate = now.toISOString();
             wallet.subscription.nextRenewalDate = next.toISOString();
+            wallet.subscription.autoSendAttempts = 0;
             wallet.subscription.history = wallet.subscription.history || [];
             const invoiceNo = 'INV-' + now.getFullYear() + '-' + String(wallet.subscription.history.length + 1).padStart(4, '0');
             wallet.subscription.history.push({ invoiceNo: invoiceNo, planId: req.planId, planName: req.planName, amount: req.amount, durationDays: req.durationDays, renewedAt: now.toISOString(), nextRenewalDate: next.toISOString(), txnId: txnId, autoRenewed: !!opts.auto });
